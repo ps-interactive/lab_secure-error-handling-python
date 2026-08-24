@@ -48,7 +48,7 @@ logger.addFilter(PIIFilter())
 # - In app.py, disable Flask's debug mode and register a generic 500 exception handler - see disable_flask_PII_mode.py
 # - Ensure app.run(debug=False) is set at the bottom of app.py
 
-# 3. Secure Global Error Handler (Hides Tracebacks from Client)
+# Secure Global Error Handler (Hides Tracebacks from Client)
 @app.errorhandler(Exception)
 def handle_unexpected_error(error):
     # Log internal error safely

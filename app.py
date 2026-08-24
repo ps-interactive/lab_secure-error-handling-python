@@ -7,7 +7,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AppLogger")
 
-# 4. Route Implementation
+# Route Implementation
 @app.route("/user/update", methods=["POST"])
 def update_user():
     data = request.get_json()
