@@ -75,7 +75,7 @@ def handle_unexpected_error(error):
 ### OBJECTIVE 3 ##########
 ##########################
 
-# Step 3: Observe Stack Trace and Environment Variable Leakage
+# Step 1: Observe Stack Trace and Environment Variable Leakage
 # - Open the Terminal inside VS Code or the standalone Terminal Emulator.
 # - Navigate to the application folder (see commands.sh): cd /home/ubuntu/fastapi-secure-handling
 # - Start the FastAPI service using uvicorn (see commands.sh): uvicorn main:app --reload --port 8000
@@ -88,19 +88,62 @@ content-type: text/plain; charset=utf-8
 Internal Server Error: Database connection failed! Env Context -> DB: postgresql://admin:SuperSecretPass123!@db.internal:5432/prod_db | Key: sk_live_998877665544332211
 
 
-# Step 4: Implement Custom Global Error Handler in FastAPI
+# Step 2: 
+# Add imports
+import os
+import logging
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
+
+# Step 3:
+# Configure internal secure logger
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger("SecurityLogger")
+
+# Step 4:
+# Implement Custom Global Error Handler in FastAPI
 # - Open main.py in Visual Studio Code.
 # - Add imports for Request, logging, and HTMLResponse or JSONResponse: see main.py
 # - Save the changes to main.py.
-!!! JSONResponse seems to be missing. TODO
 
+# Custom Exception Handler to capture all unhandled broad exceptions
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # Log the exact exception internally for diagnostic debugging
+    logger.error(f"Unhandled Exception at {request.url.path}: {exc}", exc_info=True)
+    
+    # Render a safe custom HTML error page for the end user without internal details
+    custom_error_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>500 - Internal Server Error</title>
+        <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f8f9fa; }
+            h1 { color: #dc3545; }
+            p { color: #6c757d; }
+        </style>
+    </head>
+    <body>
+        <h1>An Unexpected Error Occurred</h1>
+        <p>Our engineering team has been notified. Please try again later.</p>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=custom_error_html, status_code=500)
 
-# Step 5: Verify Secure Error Rendering Remediations
+# Step 5: Remove the credentials from the RuntimeError message
+# Replace this: raise RuntimeError(f"Database connection failed! Env Context -> DB: {db_url} | Key: {secret}")
+# with this:
+raise RuntimeError(f"Database connection failed!")
+
+# Step 6: Verify Secure Error Rendering Remediations
 # - If Uvicorn was running with --reload, it automatically reloaded the application. If not, restart Uvicorn in your terminal session:
 #   uvicorn main:app --port 8000
 # - Re-run the test request from the second terminal window:
 #   curl -i http://127.0.0.1:8000/items/error
-# - Verify that the response body now outputs the generic, styled HTML error page without 
+# - Verify that the response body now outputs the generic, styled HTML error page WITHOUT: 
 #   - leaking database URIs, 
 #   - API keys, or 
 #   - Raw stack trace lines:
