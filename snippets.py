@@ -2,18 +2,69 @@
 ### OBJECTIVES 1 and 2 ###
 ##########################
 
-# Step 3: Implement Custom Logging Filter to Scrub PII
+# Step 2: Implement Custom Logging Filter to Scrub PII
 # - Add a PIIFilter class to intercept and sanitize log records - see PIIFilter.py
-# - Attach the filter to your logger instance
 
-logger = logging.getLogger("AppLogger")
+# Secure Global Error Handler (Hides Tracebacks from Client)
+class PIIFilter(logging.Filter):
+    SENSITIVE_KEYS = {"password", "api_key", "secret", "ssn", "credit_card"}
+
+    def filter(self, record):
+        # 1. Scrub dictionary payloads
+        if isinstance(record.msg, dict):
+            record.msg = self._sanitize_dict(record.msg)
+        # 2. Scrub string messages
+        elif isinstance(record.msg, str):
+            record.msg = self._sanitize_string(record.msg)
+            
+        # 3. Scrub exception message/tracebacks if present
+        if record.exc_text:
+            record.exc_text = self._sanitize_string(record.exc_text)
+
+        return True
+
+    def _sanitize_string(self, text):
+        # Basic check to redact sensitive strings or keys
+        for key in self.SENSITIVE_KEYS:
+            if key in text.lower():
+                return "[REDACTED SENSITIVE CONTENT]"
+        return text
+
+    def _sanitize_dict(self, data):
+        cleaned_data = copy.deepcopy(data)
+        for key, value in cleaned_data.items():
+            if key.lower() in self.SENSITIVE_KEYS:
+                cleaned_data[key] = "[REDACTED]"
+            elif isinstance(value, dict):
+                cleaned_data[key] = self._sanitize_dict(value)
+        return cleaned_data
+
+
+# Attach the filter to your logger instance
 logger.addFilter(PIIFilter())
 
-# Step 4: Implement Secure Exception Handlers
+# Step 3: Implement Secure Exception Handlers
+# Here we deal with application traces that reveal sensitive data
 # - In app.py, disable Flask's debug mode and register a generic 500 exception handler - see disable_flask_PII_mode.py
 # - Ensure app.run(debug=False) is set at the bottom of app.py
 
-# Step 5: Verify Secure Error Handling and Logging Remediations
+# 3. Secure Global Error Handler (Hides Tracebacks from Client)
+@app.errorhandler(Exception)
+def handle_unexpected_error(error):
+    # Log internal error safely
+    logger.error(
+        f"An unexpected internal error occurred: {error}", exc_info=True
+    )
+
+    # Return sanitized generic response to user
+    response = {
+        "error": "Internal Server Error",
+        "message": "An unexpected error occurred. Please try again later.",
+    }
+    return jsonify(response), 500
+
+
+# Step 4: Verify Secure Error Handling and Logging Remediations
 # - Stop the running Flask application in the Terminal by pressing Ctrl + C
 # - Restart the updated application: python3 app.py
 # - Execute the test request again from the second Terminal window - see the curl call in commands.sh
@@ -73,16 +124,3 @@ content-type: text/html; charset=utf-8
     </html>
 # - Check the application log in the first terminal window to verify that the complete traceback and 
 #   error context were recorded securely on the backend server for troubleshooting purposes.
-
-# Unexpected error handler
-@app.errorhandler(Exception)
-def handle_unexpected_error(error):
-    # Log the full exception internally for debugging
-    logger.error(f"Internal system error occurred: {error}", exc_info=True)
-    
-    # Return a safe, generic response to the user
-    response = {
-        "error": "Internal Server Error",
-        "message": "An unexpected error occurred. Please try again later."
-    }
-    return jsonify(response), 500
